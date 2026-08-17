@@ -88,7 +88,31 @@ Three sections, strictly separated:
 
 ## Scripts
 
-- `scripts/run_audit.py` — the main audit runner. Reads research JSON + report markdown, produces ledger + report. See script docstring for usage.
+- `scripts/run_audit.py` — the main audit runner. Reads research JSON + report markdown, produces ledger + report.
+
+  **Usage:**
+  ```bash
+  # from the gpt-researcher repo root
+  .venv/bin/python audit-layer/scripts/run_audit.py \
+    --input <research_output.json> --output-dir audit_output/
+  ```
+
+  **Input JSON** (`--input`): `{"report": "...", "research_sources": [...], "visited_urls": [...]}`. Alt: `--report`, `--sources`, `--visited` separately.
+
+  **LLM config** (for claim-source alignment):
+  - `DEEPSEEK_API_KEY` -> DeepSeek (default `deepseek-chat`)
+  - `OPENAI_API_KEY` -> OpenAI (default `gpt-4o-mini`)
+  - `ANTHROPIC_API_KEY` -> Anthropic (default `claude-3-5-haiku`)
+  - `AUDIT_LLM_MODEL` overrides the model.
+  - `AUDIT_LLM=0` forces deterministic (heuristic) mode — no LLM, no API cost.
+  - No key set -> deterministic mode automatically.
+
+  **Outputs** (in `--output-dir`): `audit_ledger_<ts>.json`, `audit_report_<ts>.md`, `source_tiers_<ts>.json`, `audit_summary_<ts>.json`.
+
+- `scripts/run_evals.py` — drives gpt-researcher through the evals (requires `DEEPSEEK_API_KEY` + `DASHSCOPE_API_KEY` for embeddings + `TAVILY_API_KEY`). Writes per-eval `research_output.json`. Uses `evals/config.deepseek.json` (CONFIG_PATH) so it runs on DeepSeek/Tavily/DashScope without OpenAI keys.
+
+- `evals/evals.json` — the three eval prompts (due diligence / competitive / market-size).
+- `workspace/iteration-N/` — skill-creator eval workspace: `eval-<id>/with_skill/` (audit outputs) vs `eval-<id>/baseline/` (raw gpt-researcher report).
 
 ## Rules
 
