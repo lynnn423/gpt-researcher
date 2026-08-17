@@ -18,9 +18,15 @@ GPT Researcher produces a cited report, but it does **not** label confidence, do
 
 Every audit run produces:
 
-1. **Audit report (Markdown)** — three sections: Conclusions / Evidence / Uncertainty.
+1. **Audit report (Markdown)** — the audited deliverable, organized by report
+   sections, with executive summary, per-claim verdict + confidence + evidence
+   + source link. Default English; `--lang zh` for Chinese UI labels.
 2. **Audit ledger (JSON)** — per-claim record: `{claim, source_url, source_tier, verdict, confidence, evidence}`.
 3. **Source tiering list** — every visited URL graded by authority tier.
+
+The **raw research report** (from GPT Researcher) is preserved alongside and is
+part of the deliverable: the client reads the raw report for content and the
+audit report for traceability. Deliver both together.
 
 ## Pipeline
 
