@@ -124,8 +124,51 @@ def extract_claims(report_md: str) -> list:
     Cleans markdown noise (headings, rules, tables, inline link syntax) and
     merges sentence fragments that belong to the same assertion. The goal is
     readable, audit-able claims — not a mechanical sentence split.
+
+    Returns a flat list of claims, in original order. Section grouping is
+    provided separately by extract_sections().
+    """
+    sections = extract_sections(report_md)
+    claims = []
+    for _title, section_claims in sections:
+        claims.extend(section_claims)
+    return claims
+
+
+def extract_sections(report_md: str) -> list:
+    """Split the report into sections, each with its claims.
+
+    Returns list of (section_title, [claims]). Claims within a section are
+    extracted from that section's body text. The flat concatenation of all
+    section claims preserves original order (used for claim_index alignment).
     """
     lines = report_md.split("\n")
+    # Find section boundaries: lines starting with '## ' (level-2 headings)
+    sections = []          # list of (title, [raw lines])
+    current_title = "Overview"
+    current_lines = []
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith("## "):
+            if current_lines:
+                sections.append((current_title, current_lines))
+            current_title = s[3:].strip()
+            current_lines = []
+        else:
+            current_lines.append(s)
+    if current_lines:
+        sections.append((current_title, current_lines))
+
+    result = []
+    for title, sec_lines in sections:
+        claims = _claims_from_lines(sec_lines)
+        if claims:
+            result.append((title, claims))
+    return result
+
+
+def _claims_from_lines(lines: list) -> list:
+    """Extract claims from a section's raw lines (markdown cleanup + merge)."""
     # Pre-pass: convert markdown table blocks into readable sentences
     table_block = []
     out_lines = []
@@ -135,10 +178,9 @@ def extract_claims(report_md: str) -> list:
             table_block.append(s)
             continue
         if table_block:
-            # table ended: render as a compact readable sentence
             headers = [c.strip() for c in table_block[0].strip("|").split("|")]
             rendered = []
-            for row in table_block[2:]:  # skip separator row
+            for row in table_block[2:]:
                 cells = [c.strip() for c in row.strip("|").split("|")]
                 rendered.append(": ".join(f"{h}={c}" for h, c in zip(headers, cells) if c))
             out_lines.append("Table: " + "; ".join(rendered))
@@ -157,24 +199,19 @@ def extract_claims(report_md: str) -> list:
         s = ln.strip()
         if not s:
             continue
-        # skip markdown structural noise
         if s.startswith("#") or s == "---" or s.startswith("```"):
             continue
-        # inline markdown cleanup
-        s = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)   # [text](url) -> text
-        s = re.sub(r"\*\*([^*]+)\*\*", r"\1", s)          # **bold** -> bold
-        s = re.sub(r"\*([^*]+)\*", r"\1", s)              # *em* -> em
+        s = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)
+        s = re.sub(r"\*\*([^*]+)\*\*", r"\1", s)
+        s = re.sub(r"\*([^*]+)\*", r"\1", s)
         clean_lines.append(s)
 
     text = " ".join(clean_lines)
-    # Collapse whitespace
     text = re.sub(r"\s+", " ", text)
-    # split into sentences at sentence boundaries, keep decimal/abbrev intact
     sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9({\[\"'A-Z])", text)
 
     claims = []
     buffer = ""
-    # Endings that indicate an incomplete sentence (should merge with next)
     incomplete_endings = (
         "the Bartz v", "with the U.S", "concerns (Wikipedia)", "the company has been involved",
         "notable dispute with", "such as", "including", "e.g.", "i.e.", "the following",
@@ -184,7 +221,6 @@ def extract_claims(report_md: str) -> list:
         s = s.strip()
         if not s:
             continue
-        # Merge continuation fragments (short pieces that are part of previous)
         ends_incomplete = buffer.rstrip().endswith(incomplete_endings) or \
                           any(buffer.rstrip().endswith(e) for e in incomplete_endings)
         if len(s) < 40 or ends_incomplete:
@@ -226,15 +262,23 @@ def _llm_config():
 def _llm_alignment_prompt(claims, sources):
     """Build the LLM prompt for claim-source alignment."""
     source_block = "\n".join(
-        f"[S{i}] {s.get('url','')} :: {s.get('title','')} :: {s.get('content','')[:400]}"
+        f"[S{i}] {s.get('url','')} :: {s.get('title','')} :: {s.get('content','')[:600]}"
         for i, s in enumerate(sources)
     )
     claim_block = "\n".join(f"[C{i}] {c}" for i, c in enumerate(claims))
     return (
         "You are a rigorous research auditor. For each claim, decide: "
         "which source index best supports it (or none), the verdict "
-        "(verified/uncertain/not found), a confidence 0-1, and a one-line "
+        "(verified/uncertain/not found), a confidence 0-1, and a detailed "
         "evidence note.\n\n"
+        "The evidence note must be 2-3 sentences explaining the judgment:\n"
+        "- For verified: quote/summarize the specific part of the source "
+        "content that supports the claim, and note any partial mismatch.\n"
+        "- For uncertain: explain the weakness — conflicting sources, "
+        "indirect support, missing specifics, or single weak source.\n"
+        "- For not found: state explicitly that no provided source supports "
+        "the claim (this is a claim-level 'not found in provided sources', "
+        "not a claim of global non-existence).\n\n"
         "SOURCES:\n" + source_block +
         "\n\nCLAIMS:\n" + claim_block +
         "\n\nReply ONLY with JSON: an array of objects "
@@ -281,30 +325,118 @@ def _llm_audit_batch(claims: list, sources: list) -> list:
 
 # ---------------------------------------------------------------- output composition
 
-def build_audit_report(ledger: list, report_md: str) -> str:
+# ---------------------------------------------------------------- i18n templates
+
+def _templates(lang: str) -> dict:
+    en = {
+        "title": "Audit Report",
+        "subtitle": "Audit Report",
+        "generated": "Generated",
+        "verdict_line": "Verdicts",
+        "exec_summary": "Executive Summary",
+        "exec_note": "This report labels every claim with a verdict and confidence so a reviewer can audit each conclusion independently.",
+        "verified": "✅ Verified",
+        "uncertain": "⚠️ Uncertain",
+        "not_found": "❌ No source",
+        "confidence": "confidence",
+        "tier": "tier",
+        "evidence": "Evidence",
+        "source": "Source",
+        "searched": "searched",
+        "conclusions": "Conclusions",
+        "uncertainty": "Uncertainty",
+        "section": "Section",
+    }
+    zh = {
+        "title": "审计报告",
+        "subtitle": "审计报告",
+        "generated": "生成时间",
+        "verdict_line": "判定统计",
+        "exec_summary": "执行摘要",
+        "exec_note": "本报告对每条结论标注判定与置信度，供复核者逐条独立审计。",
+        "verified": "✅ 已核实",
+        "uncertain": "⚠️ 存疑",
+        "not_found": "❌ 查无来源",
+        "confidence": "置信度",
+        "tier": "来源分级",
+        "evidence": "证据说明",
+        "source": "来源",
+        "searched": "搜索路径",
+        "conclusions": "已核实结论",
+        "uncertainty": "存疑与查无来源",
+        "section": "章节",
+    }
+    return en if lang != "zh" else zh
+
+
+def build_audit_report(ledger: list, report_md: str, lang: str = "en",
+                       sections: list = None) -> str:
+    """Build the audited report, organized by report sections.
+
+    Each section lists its claims with verdict + confidence + evidence + source.
+    A short executive summary is placed at the top.
+    """
+    t = _templates(lang)
     verified = [c for c in ledger if c["verdict"] == "verified"]
     uncertain = [c for c in ledger if c["verdict"] == "uncertain"]
     not_found = [c for c in ledger if c["verdict"] == "not found"]
 
     def fmt_claim(c, idx):
-        verdict_icon = {"verified": "✅ Verified", "uncertain": "⚠️ Uncertain",
-                        "not found": "❌ No source"}[c["verdict"]]
+        icon = t["verified"] if c["verdict"] == "verified" else (
+            t["uncertain"] if c["verdict"] == "uncertain" else t["not_found"])
+        conf = f"{t['confidence']} {c['confidence']:.0%}"
         link = f" [{c['source_url']}]({c['source_url']})" if c["source_url"] else ""
-        tier = f" · tier {c['source_tier']}" if c["source_tier"] else ""
-        return (f"{idx}. {verdict_icon} (confidence {c['confidence']:.0%}) — {c['claim']}"
-                f"\n   {link}{tier}")
+        tier = f" · {t['tier']} {c['source_tier']}" if c["source_tier"] else ""
+        ev = f"  \n   · {t['evidence']}: {c['evidence']}" if c.get("evidence") else ""
+        return (f"{idx}. {icon} ({conf}) — {c['claim']}{ev}"
+                f"  \n   · {t['source']}: {link or '—'}{tier}")
 
-    lines = ["# Audit Report\n",
-             f"> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}  \n",
-             f"> Verdicts: {len(verified)} verified · {len(uncertain)} uncertain · {len(not_found)} not found\n",
-             "\n---\n\n## 1. Conclusions\n"]
-    for i, c in enumerate(verified, 1):
-        lines.append(fmt_claim(c, i))
-    lines.append("\n---\n\n## 2. Uncertainty\n")
-    for i, c in enumerate(uncertain + not_found, 1):
-        sp = "; ".join(c["search_path"]) if c["search_path"] else "no documented search path"
-        lines.append(f"{i}. ❌ {c['claim']}  \n   · searched: {sp}")
-    return "\n".join(lines)
+    # Executive summary block
+    total = len(ledger)
+    exec_lines = [
+        f"# {t['subtitle']}\n",
+        f"> {t['generated']}: {datetime.now().strftime('%Y-%m-%d %H:%M')}  \n",
+        f"> {t['verdict_line']}: {len(verified)} {t['verified']} · "
+        f"{len(uncertain)} {t['uncertain']} · {len(not_found)} {t['not_found']} "
+        f"({total} total)\n",
+        "\n---\n\n## {}\n".format(t["exec_summary"]),
+        t["exec_note"],
+        "\n",
+    ]
+
+    # Section-organized claims
+    if sections:
+        # Build a claim -> index map (flat order = ledger order)
+        flat = [c["claim"] for c in ledger]
+        body = ["\n---\n"]
+        for title, sec_claims in sections:
+            # find ledger records for this section's claims, preserving order
+            sec_records = []
+            used = set()
+            for sc in sec_claims:
+                for idx, rec in enumerate(ledger):
+                    if idx not in used and rec["claim"] == sc:
+                        sec_records.append(rec)
+                        used.add(idx)
+                        break
+            if not sec_records:
+                continue
+            body.append(f"\n## {t['section']} · {title}\n")
+            for i, rec in enumerate(sec_records, 1):
+                body.append(fmt_claim(rec, i))
+        body_lines = body
+    else:
+        # flat fallback
+        body_lines = [f"\n## {t['conclusions']}\n"]
+        for i, c in enumerate(verified, 1):
+            body_lines.append(fmt_claim(c, i))
+        body_lines.append(f"\n## {t['uncertainty']}\n")
+        for i, c in enumerate(uncertain + not_found, 1):
+            body_lines.append(f"{i}. {t['not_found']} — {c['claim']}")
+            sp = "; ".join(c["search_path"]) if c.get("search_path") else "—"
+            body_lines.append(f"   · {t['searched']}: {sp}")
+
+    return "\n".join(exec_lines + body_lines)
 
 
 def build_summary(ledger: list) -> dict:
@@ -332,6 +464,7 @@ def main():
     ap.add_argument("--sources", help="sources JSON file (alternative to --input)")
     ap.add_argument("--visited", help="visited urls JSON (alternative to --input)")
     ap.add_argument("--output-dir", default="audit_output")
+    ap.add_argument("--lang", default="en", choices=["en", "zh"], help="report language (default en)")
     args = ap.parse_args()
 
     if args.input:
@@ -349,6 +482,7 @@ def main():
         sys.exit(1)
 
     claims = extract_claims(report_md)
+    sections = extract_sections(report_md)
     ledger = []
 
     llm_result = _llm_audit_batch(claims, sources) if llm_mode_available() else None
@@ -382,13 +516,15 @@ def main():
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     with open(os.path.join(args.output_dir, f"audit_ledger_{ts}.json"), "w", encoding="utf-8") as f:
         json.dump(ledger, f, ensure_ascii=False, indent=2)
+    report_md_text = build_audit_report(ledger, report_md, lang=args.lang, sections=sections)
     with open(os.path.join(args.output_dir, f"audit_report_{ts}.md"), "w", encoding="utf-8") as f:
-        f.write(build_audit_report(ledger, report_md))
+        f.write(report_md_text)
     tiers = [tier_for_url(u) for u in sorted(visited_urls)]
     with open(os.path.join(args.output_dir, f"source_tiers_{ts}.json"), "w", encoding="utf-8") as f:
         json.dump(tiers, f, ensure_ascii=False, indent=2)
     summary = build_summary(ledger)
     summary["output_prefix"] = ts
+    summary["lang"] = args.lang
     with open(os.path.join(args.output_dir, f"audit_summary_{ts}.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
