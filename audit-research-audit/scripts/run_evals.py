@@ -12,7 +12,7 @@ from datetime import datetime
 
 # Use custom config: DeepSeek LLM + Tavily retriever (avoids default openai:gpt-5.4)
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-os.environ["CONFIG_PATH"] = os.path.join(_REPO_ROOT, "audit-layer", "evals", "config.deepseek.json")
+os.environ["CONFIG_PATH"] = os.path.join(_REPO_ROOT, "audit-research-audit", "evals", "config.deepseek.json")
 sys.path.insert(0, _REPO_ROOT)
 
 from gpt_researcher import GPTResearcher

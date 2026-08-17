@@ -113,7 +113,7 @@ Three sections, strictly separated:
   **Usage:**
   ```bash
   # from the gpt-researcher repo root
-  .venv/bin/python audit-layer/scripts/run_audit.py \
+  .venv/bin/python audit-research-audit/scripts/run_audit.py \
     --input <research_output.json> --output-dir audit_output/
   ```
 
@@ -142,7 +142,7 @@ fact-check verdicts back.
 
 ```bash
 # 1. Select claims (weak + top-N core conclusions by default)
-.venv/bin/python audit-layer/scripts/deep_check.py \
+.venv/bin/python audit-research-audit/scripts/deep_check.py \
   --ledger audit_ledger_<ts>.json --report audit_report_<ts>.md \
   --output-dir deep_check_output/
 #   -> writes deep_check_plan_<ts>.md: the claims to fact-check
@@ -159,7 +159,7 @@ fact-check verdicts back.
 ```bash
 # 3. Re-run deep_check.py — it picks up verdicts.json and merges
 #    the deep-check verdicts into the report (body + appendix).
-.venv/bin/python audit-layer/scripts/deep_check.py \
+.venv/bin/python audit-research-audit/scripts/deep_check.py \
   --ledger ... --report ... --output-dir deep_check_output/
 #   -> writes report_with_deepcheck_<ts>.md
 ```
