@@ -1,8 +1,0 @@
-{
-  "RETRIEVER": "tavily",
-  "FAST_LLM": "deepseek:deepseek-chat",
-  "SMART_LLM": "deepseek:deepseek-chat",
-  "LLM_MODEL": "deepseek-chat",
-  "EMBEDDING": "dashscope:text-embedding-v3",
-  "REPORT_SOURCE": "web"
-}
