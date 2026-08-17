@@ -154,6 +154,9 @@ def extract_sections(report_md: str) -> list:
                 sections.append((current_title, current_lines))
             current_title = s[3:].strip()
             current_lines = []
+            # References/Sources sections are citation lists, not claims — stop.
+            if current_title.lower() in ("references", "sources", "bibliography"):
+                break
         else:
             current_lines.append(s)
     if current_lines:
