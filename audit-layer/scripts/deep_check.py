@@ -108,7 +108,7 @@ def merge_verdicts(report_md: str, plan: list, verdicts: dict) -> str:
     for ln in lines:
         out.append(ln)
     # Append deep-check appendix
-    out.append("\n---\n\n## Deep-Check Appendix (bullshit-detector)\n")
+    out.append("\n---\n\n## Independent Fact-Check Appendix\n")
     for p in plan:
         idx = str(p["claim_index"])
         v = verdicts.get(idx)
