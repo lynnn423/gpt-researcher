@@ -1,0 +1,26 @@
+{
+  "skill_name": "gpt-researcher-audit-layer",
+  "evals": [
+    {
+      "id": 1,
+      "name": "due-diligence-company",
+      "prompt": "Research a private company for due diligence: verify its founding year, funding history, leadership, and whether it has any confirmed legal disputes or regulatory penalties. The final deliverable must let a reviewer trace every claim back to a source, know which claims are solid vs uncertain, and see documented proof for any negative findings.",
+      "expected_output": "An audited due-diligence report where every claim carries a source URL, a confidence label (verified/uncertain/not found), negative findings with documented search paths, and a per-claim audit ledger.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "competitive-landscape",
+      "prompt": "Analyze the competitive landscape of an AI assistant product category: list the main competitors, compare pricing and positioning, and flag any claims about market share that lack reliable sources. The client will use this for IC review, so every conclusion must be traceable and confidence-labeled.",
+      "expected_output": "An audited competitive analysis with source-tiered citations, confidence labels on market-share and pricing claims, and a separate uncertainty section listing unsupported claims.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "market-research-verification",
+      "prompt": "Research a market-size estimate for a niche industry. Some sources give conflicting numbers. The deliverable must identify which estimates are verified, which conflict, and clearly mark any figure that could not be confirmed in any searched source — with the search path documented.",
+      "expected_output": "An audited market research note separating verified estimates from conflicting ones, with not-found figures clearly labeled and search paths documented.",
+      "files": []
+    }
+  ]
+}

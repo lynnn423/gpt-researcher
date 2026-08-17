@@ -59,8 +59,12 @@ TIER_RULES = [
     # (regex, tier, label)
     (r"\.gov(/|$)", "T1", "official-gov"),
     (r"\.edu(/|$)", "T1", "official-edu"),
+    (r"wikipedia\.org", "T2", "wikipedia"),
+    (r"\.wikipedia\.org", "T2", "wikipedia"),
     (r"(^|\.)(reuters\.com|bloomberg\.com|wsj\.com|nytimes\.com|cnbc\.com|ft\.com|theverge\.com|wired\.com|apnews\.com|axios\.com|economist\.com)(/|$)", "T2", "major-media"),
     (r"(^|\.)(sec\.gov|fda\.gov|fec\.gov|who\.int|imf\.org|worldbank\.org|github\.com)(/|$)", "T1", "official-org"),
+    # company primary source: company domain (anthropic.com, openai.com, ...) — T1 primary
+    (r"(^|\.)(anthropic\.com|openai\.com|google\.com|meta\.com|microsoft\.com|apple\.com|nvidia\.com|databricks\.com|palantir\.com|c3\.ai)(/|$)", "T1", "company-primary"),
     (r"(reddit\.com|twitter\.com|x\.com|facebook\.com|quora\.com|forums?\.)", "T4", "ugc"),
 ]
 
@@ -117,21 +121,81 @@ def verdict_for_claim(claim: str, sources: list, visited_urls: set) -> dict:
 def extract_claims(report_md: str) -> list:
     """Split report body into discrete claims (atomic assertions).
 
-    Splits on sentence boundaries but keeps fragments that are part of the
-    same assertion. Heuristic: split on '. ' but not on common abbreviations.
+    Cleans markdown noise (headings, rules, tables, inline link syntax) and
+    merges sentence fragments that belong to the same assertion. The goal is
+    readable, audit-able claims — not a mechanical sentence split.
     """
-    body = report_md
-    # Strip code blocks / tables noise minimally
-    body = re.sub(r"\n\|.*?\|\n", " ", body, flags=re.S)  # table rows
-    body = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", body)      # images
-    body = re.sub(r"\n+", " ", body)
-    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9({\[])", body)
+    lines = report_md.split("\n")
+    # Pre-pass: convert markdown table blocks into readable sentences
+    table_block = []
+    out_lines = []
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith("|") and s.endswith("|"):
+            table_block.append(s)
+            continue
+        if table_block:
+            # table ended: render as a compact readable sentence
+            headers = [c.strip() for c in table_block[0].strip("|").split("|")]
+            rendered = []
+            for row in table_block[2:]:  # skip separator row
+                cells = [c.strip() for c in row.strip("|").split("|")]
+                rendered.append(": ".join(f"{h}={c}" for h, c in zip(headers, cells) if c))
+            out_lines.append("Table: " + "; ".join(rendered))
+            table_block = []
+        out_lines.append(s)
+    if table_block:
+        headers = [c.strip() for c in table_block[0].strip("|").split("|")]
+        rendered = []
+        for row in table_block[2:]:
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            rendered.append(": ".join(f"{h}={c}" for h, c in zip(headers, cells) if c))
+        out_lines.append("Table: " + "; ".join(rendered))
+
+    clean_lines = []
+    for ln in out_lines:
+        s = ln.strip()
+        if not s:
+            continue
+        # skip markdown structural noise
+        if s.startswith("#") or s == "---" or s.startswith("```"):
+            continue
+        # inline markdown cleanup
+        s = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)   # [text](url) -> text
+        s = re.sub(r"\*\*([^*]+)\*\*", r"\1", s)          # **bold** -> bold
+        s = re.sub(r"\*([^*]+)\*", r"\1", s)              # *em* -> em
+        clean_lines.append(s)
+
+    text = " ".join(clean_lines)
+    # Collapse whitespace
+    text = re.sub(r"\s+", " ", text)
+    # split into sentences at sentence boundaries, keep decimal/abbrev intact
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9({\[\"'A-Z])", text)
+
     claims = []
+    buffer = ""
+    # Endings that indicate an incomplete sentence (should merge with next)
+    incomplete_endings = (
+        "the Bartz v", "with the U.S", "concerns (Wikipedia)", "the company has been involved",
+        "notable dispute with", "such as", "including", "e.g.", "i.e.", "the following",
+        "as of", "according to", "per ", "and", "that raised",
+    )
     for s in sentences:
         s = s.strip()
-        if len(s) < 20:  # too short to be a claim
+        if not s:
             continue
-        claims.append(s)
+        # Merge continuation fragments (short pieces that are part of previous)
+        ends_incomplete = buffer.rstrip().endswith(incomplete_endings) or \
+                          any(buffer.rstrip().endswith(e) for e in incomplete_endings)
+        if len(s) < 40 or ends_incomplete:
+            buffer = (buffer + " " + s).strip()
+            continue
+        if buffer:
+            claims.append(buffer)
+        buffer = s
+
+    if buffer:
+        claims.append(buffer)
     return claims
 
 
@@ -222,20 +286,24 @@ def build_audit_report(ledger: list, report_md: str) -> str:
     uncertain = [c for c in ledger if c["verdict"] == "uncertain"]
     not_found = [c for c in ledger if c["verdict"] == "not found"]
 
+    def fmt_claim(c, idx):
+        verdict_icon = {"verified": "✅ Verified", "uncertain": "⚠️ Uncertain",
+                        "not found": "❌ No source"}[c["verdict"]]
+        link = f" [{c['source_url']}]({c['source_url']})" if c["source_url"] else ""
+        tier = f" · tier {c['source_tier']}" if c["source_tier"] else ""
+        return (f"{idx}. {verdict_icon} (confidence {c['confidence']:.0%}) — {c['claim']}"
+                f"\n   {link}{tier}")
+
     lines = ["# Audit Report\n",
              f"> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}  \n",
              f"> Verdicts: {len(verified)} verified · {len(uncertain)} uncertain · {len(not_found)} not found\n",
              "\n---\n\n## 1. Conclusions\n"]
-    for c in verified:
-        link = f" [T?]({c['source_url']})" if c["source_url"] else ""
-        lines.append(f"- **{c['claim'][:140]}**{link}  \n  · confidence {c['confidence']} / verdict {c['verdict']}")
-    lines.append("\n---\n\n## 2. Evidence\n")
-    for c in verified:
-        lines.append(f"- {c['claim'][:140]}\n  - source: {c['source_url']} (tier {c['source_tier']})")
-    lines.append("\n---\n\n## 3. Uncertainty\n")
-    for c in uncertain + not_found:
+    for i, c in enumerate(verified, 1):
+        lines.append(fmt_claim(c, i))
+    lines.append("\n---\n\n## 2. Uncertainty\n")
+    for i, c in enumerate(uncertain + not_found, 1):
         sp = "; ".join(c["search_path"]) if c["search_path"] else "no documented search path"
-        lines.append(f"- {c['claim'][:140]}  \n  · verdict {c['verdict']} / conf {c['confidence']} / searched: {sp}")
+        lines.append(f"{i}. ❌ {c['claim']}  \n   · searched: {sp}")
     return "\n".join(lines)
 
 

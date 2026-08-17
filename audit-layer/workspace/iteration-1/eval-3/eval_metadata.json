@@ -1,0 +1,10 @@
+{
+  "eval_id": 3,
+  "eval_name": "market-research-verification",
+  "prompt": "Research a market-size estimate for a niche industry. Some sources give conflicting numbers. The deliverable must identify which estimates are verified, which conflict, and clearly mark any figure that could not be confirmed in any searched source — with the search path documented.",
+  "assertions": [
+    {"text": "audit report has three sections (Conclusions/Evidence/Uncertainty)", "passed": null},
+    {"text": "every claim maps to source or is marked not found", "passed": null},
+    {"text": "audit ledger JSON contains per-claim verdicts with confidence", "passed": null}
+  ]
+}

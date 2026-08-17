@@ -1,0 +1,10 @@
+{
+  "eval_id": 1,
+  "eval_name": "due-diligence-company",
+  "prompt": "Research a private company for due diligence: verify its founding year, funding history, leadership, and whether it has any confirmed legal disputes or regulatory penalties. The final deliverable must let a reviewer trace every claim back to a source, know which claims are solid vs uncertain, and see documented proof for any negative findings.",
+  "assertions": [
+    {"text": "audit report has three sections (Conclusions/Evidence/Uncertainty)", "passed": null},
+    {"text": "every claim maps to source or is marked not found", "passed": null},
+    {"text": "audit ledger JSON contains per-claim verdicts with confidence", "passed": null}
+  ]
+}
