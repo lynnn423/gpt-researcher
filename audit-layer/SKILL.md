@@ -1,11 +1,18 @@
 ---
-name: gpt-researcher-audit-layer
-description: Turn a research report into an auditable, decision-ready deliverable by labeling every claim with a confidence verdict (verified/uncertain/not found), mapping each to its source URL, grading sources by authority (T1-T4), documenting negative findings with search paths, and organizing results into an audit report (executive summary + per-section claims) in English or Chinese (--lang). Includes a two-stage pipeline: stage 1 (run_audit.py) labels traceability on top of GPT Researcher output; stage 2 (deep_check.py) selects load-bearing + weak claims and fact-checks them, merging confirmed/false/misleading verdicts into the report. USE THIS whenever the user asks to audit a research report, make a deliverable "auditable"/"traceable"/"every claim verified", prepare due-diligence or IC/LP material where each conclusion must be verifiable, run the audit layer on gpt-researcher output, add confidence labels / source tiering / negative-evidence search paths to a report, OR asks to format a research report as an audited deliverable with an executive summary, per-section claim verification, detailed evidence notes, and bilingual (EN/zh) output. Do NOT use for the research itself (use competitive-analysis or weizhena), and do NOT use for standalone fact-checking of arbitrary content (use bullshit-detector) — this skill audits a finished report's traceability and fact-checks selected claims within it.
+name: audit-research-audit
+description: Turn a research report into an auditable, decision-ready deliverable by labeling every claim with a confidence verdict (verified/uncertain/not found), mapping each to its source URL, grading sources by authority (T1-T4), documenting negative findings with search paths, and organizing results into an audit report (executive summary + per-section claims) in English or Chinese (--lang). Includes a two-stage pipeline: stage 1 (run_audit.py) labels traceability on top of research output; stage 2 (deep_check.py) selects load-bearing + weak claims and fact-checks them, merging confirmed/false/misleading verdicts into the report. This is the audit + fact-check layer of the audit-research system (research via the audit-research MCP deep_research tool, then audit with this skill). USE THIS whenever the user asks to audit a research report, make a deliverable "auditable"/"traceable"/"every claim verified", prepare due-diligence or IC/LP material where each conclusion must be verifiable, run the audit layer on research output, add confidence labels / source tiering / negative-evidence search paths to a report, run "audit-research" or "run the audit", OR asks to format a research report as an audited deliverable with an executive summary, per-section claim verification, detailed evidence notes, and bilingual (EN/zh) output. Do NOT use for the research itself (use competitive-analysis or weizhena, or the audit-research MCP deep_research tool), and do NOT use for standalone fact-checking of arbitrary content (use bullshit-detector) — this skill audits a finished report's traceability and fact-checks selected claims within it.
 ---
 
-# GPT Researcher Audit Layer
+# Audit Research Audit Layer (audit-research)
 
-GPT Researcher produces a cited report, but it does **not** label confidence, document negative findings, or map every claim to its exact source. This skill adds that trust layer as a post-processing stage. It is designed to be **independent** — it reads GPT Researcher's structured output and produces an audited deliverable, without touching GPT Researcher's core research logic.
+This is the **audit + fact-check layer of the audit-research system**: research
+is done by the audit-research MCP tool (deep_research / quick_search, backed by
+GPT Researcher), then this skill audits the output's traceability and
+fact-checks selected claims. GPT Researcher produces a cited report, but it does
+**not** label confidence, document negative findings, or map every claim to its
+exact source. This skill adds that trust layer as a post-processing stage. It is
+designed to be **independent** — it reads the research output and produces an
+audited deliverable, without touching the research engine's core logic.
 
 The full pipeline is two stages:
 
