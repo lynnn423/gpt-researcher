@@ -31,6 +31,7 @@ def get_retriever(retriever: str):
         - pubmed_central: PubMed Central medical literature
         - openalex: OpenAlex scholarly works catalog
         - custom: Custom user-defined retriever
+        - deepseek: DeepSeek in-house Search API
         - mcp: Model Context Protocol retriever
         - xquik: Xquik X/Twitter search
         - getxapi: GetXAPI X/Twitter search
@@ -104,6 +105,10 @@ def get_retriever(retriever: str):
             from gpt_researcher.retrievers import CustomRetriever
 
             return CustomRetriever
+        case "deepseek":
+            from gpt_researcher.retrievers import DeepSeekSearch
+
+            return DeepSeekSearch
         case "mcp":
             from gpt_researcher.retrievers import MCPRetriever
 

@@ -2,6 +2,7 @@ from .arxiv.arxiv import ArxivSearch
 from .bing.bing import BingSearch
 from .brave.brave import BraveSearch
 from .custom.custom import CustomRetriever
+from .deepseek.deepseek import DeepSeekSearch
 from .duckduckgo.duckduckgo import Duckduckgo
 from .google.google import GoogleSearch
 from .pubmed_central.pubmed_central import PubMedCentralSearch
@@ -24,6 +25,7 @@ __all__ = [
     "TavilySearch",
     "GroundRouteSearch",
     "CustomRetriever",
+    "DeepSeekSearch",
     "Duckduckgo",
     "SearchApiSearch",
     "SerperSearch",

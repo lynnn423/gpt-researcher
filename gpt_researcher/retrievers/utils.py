@@ -63,6 +63,7 @@ VALID_RETRIEVERS = [
     "tavily",
     "groundroute",
     "custom",
+    "deepseek",
     "duckduckgo",
     "searchapi",
     "serper",
